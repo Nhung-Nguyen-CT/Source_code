@@ -60,7 +60,7 @@ print(model2.summary())
 print(sm.stats.anova_lm(model2, typ = 2))
 print(sm.stats.anova_lm(model2, typ = 1))
 print(sm.stats.anova_lm(model2, typ = 3))
-
+print()
 
 #ANOVA post hoc test (Part II)
 diamonds = pd.read_csv('diamonds.csv')
