@@ -51,3 +51,5 @@ fig.set_xlabel("Fitted values")
 fig.set_ylabel("Residuals")
 fig.set_title("Scatter plot resid by fitted values")
 plt.show()
+
+print('end')
