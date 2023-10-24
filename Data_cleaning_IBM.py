@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
+import scipy
 from scipy.stats import norm
 from scipy import stats
 
@@ -37,10 +38,10 @@ log_transformed = np.log(housing['SalePrice'])
 sp_transformed = sns.displot(log_transformed)
 print('Skewness: %f' % (log_transformed).skew())
 
-fig1 = sns.distplot(housing['Lot Area'])
+fig1 = sns.displot(housing['Lot Area'])
 print('Skewness: %f' % housing['Lot Area'].skew())
 log_transformed_lot = np.log(housing['Lot Area'])
-fig2 = sns.distplot(housing['Lot Area'])
+fig2 = sns.displot(housing['Lot Area'])
 print('Skewness: %f' % log_transformed_lot.skew())
 
 #Handling the Duplicates
@@ -49,8 +50,7 @@ duplicate = housing[housing.duplicated(['PID'])]
 dup_removed = housing.drop_duplicates()
 #delete duplicated Order ID
 dup_order = housing[housing.duplicated(['Order'])]
-dup_order_removed = dup_order[dup_order.drop_duplicates(subset = ['Order'])]
-
+dup_order_removed = dup_order.drop_duplicates(subset = ['Order'])
 #Handling with missing values
 total_missing = housing.isnull().sum().sort_values(ascending = False)
 total_missing_select = total_missing.head(20)
@@ -77,7 +77,8 @@ norm_data
 scaled_data = StandardScaler().fit_transform(hous_num)
 scaled_data
 #standardization for 1 column:
-scaled_price = StandardScaler().fit_transform(hous_num['SalePrice'][:,np.newaxis])
+hous_num_price = np.asarray(hous_num['SalePrice'])
+scaled_price = StandardScaler().fit_transform(hous_num_price[:,np.newaxis])
 
 #Handling with outliers
 sns.boxplot(x=housing['Lot Area'])
@@ -94,3 +95,4 @@ plt.show()
 #finding outlier by z-score
 housing['L_stats'] = stats.zscore(housing['Low Qual Fin SF'])
 outliers = housing[housing['L_stats'] > 3]
+housing_removed_outliers = housing.drop(outliers.index)
