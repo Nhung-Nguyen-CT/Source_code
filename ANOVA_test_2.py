@@ -56,3 +56,9 @@ print(sm.stats.anova_lm(model, typ = 3))
 #post hoc test
 tukey_hsd = pairwise_tukeyhsd(endog = df['Sales'], groups = df['TV'], alpha = 0.05)
 print(tukey_hsd.summary())
+
+
+def sort():
+
+    # ABCD
+    pass
