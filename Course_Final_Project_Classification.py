@@ -24,17 +24,24 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.decomposition import PCA
 import math
 
+from optbinning import MulticlassOptimalBinning
+
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
-pd.set_option('display.width', 1000)
+pd.set_option('display.width', 5000)
+
+
+#THIS MODEL WILL FOCUS ON PREDICTIVE OF CREDIT CLASS (3 CLASS)
+#MODEL USING: XGBOOST, RANDOMFOREST AND LOGISTIC REGRESSION
 
 df = pd.read_csv('bank_credit_scoring.csv', delimiter= ',')
 df.info()
-
+df.head(10)
+df.describe(include='all')
 #I. CLEAN DATA
 
 print(df.duplicated().any())
-print(df.isnull.any())
+print(df.isnull().any())
 
 
 #Find and drop the high corellation variables:
@@ -53,14 +60,15 @@ def get_top_abs_correlations(df, mark = 0.5):
     au_corr = au_corr.drop(labels=labels_to_drop).sort_values(ascending=False)
 
     return au_corr[au_corr > mark]
+
 numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
 df1 = df[numeric_columns].copy()
 print("Top Absolute Correlations")
 print(get_top_abs_correlations(df = df1, mark = 0.6))
 
-df = df.drop(columns=['ID', 'Customer_ID', 'Name', 'SSN','Monthly_Inhand_Salary', 'Amount_invested_monthly', 'Monthly_Balance', 'Num_of_Loan', 'Interest_Rate', 'Num_Credit_Inquiries' ])
+df = df.drop(columns=['ID','Customer_ID', 'Name', 'SSN','Monthly_Inhand_Salary', 'Amount_invested_monthly', 'Monthly_Balance', 'Num_of_Loan', 'Interest_Rate', 'Num_Credit_Inquiries' ])
 
-#object columns with low frequency of values (high n unique)
+#Check more details about dataset
 len_df = len(df)
 high_nunique_object_columns = [x for x in df.columns if ((df[x].dtypes == 'O') & (df[x].nunique() > 0.1 * len_df))]
 low_nunique_object_columns = [x for x in df.columns if ((df[x].dtypes == 'O') & (df[x].nunique() <= 0.1 * len_df))]
@@ -88,7 +96,7 @@ numeric_cols_need_encode = ['Month']
 object_cols_need_spare = ['Type_of_Loan']
 object_cols_need_encode = [x for x in low_nunique_object_columns if ((x != 'Type_of_Loan') & (x != 'Credit_Score'))] # exclude Credit Score and Type of Loan
 cols_need_encode = numeric_cols_need_encode + object_cols_need_encode
-scale_cols = [x for x in df.columns if  (df[x].dtypes != 'O' ) & (x != 'Month') & ( x != 'Unnamed: 0')]
+scale_cols = [x for x in df.columns if  (df[x].dtypes != 'O' ) & (x != 'Month') & (x != 'Unnamed: 0')]
 
 
 type_of_Loan_value_counts = (df['Type_of_Loan'].value_counts())
@@ -117,15 +125,13 @@ df = df.drop(columns=['Type_of_Loan'])
 df.iloc[:,:9] = np.where(df.iloc[:,:9] >= 1, 1, 0)
 print(df.describe().T)
 
-#plot data
-sns.histplot(data = df, x = 'Credit_Score', kind = 'hist', hue = 'Credit_Score')
+#plot data to more exploration
+sns.histplot(data = df, x = 'Credit_Score', hue = 'Credit_Score')
 plt.show()
 # => imbalance 'Credit_score' values
-
+#plot numerical features with Credit_Score
 numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
 df1 = df[numeric_columns + ['Credit_Score']].copy()
-
-
 # Iterate through features and create KDE plots
 for i in range ( math.ceil(len(df1.columns)/4)):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -138,7 +144,7 @@ for i in range ( math.ceil(len(df1.columns)/4)):
     plt.show()
 
 drop_cols = ['Month'] # drop because no relationship on y
-
+#plot category features with Credit_Score
 cate_columns = [x for x in df.columns if df[x].dtypes == 'O']
 df1 = df[cate_columns].copy()
 fig, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -150,6 +156,7 @@ for i in range(2):
     sns.histplot(data=df1, x=cate_columns[i*2+1], hue='Credit_Score', ax=axes[1, i], hue_order=['Good', 'Standard', 'Poor'], kde= True)
 plt.show()
 
+#Non - linear relationships between Credit_Score and X features
 df = df.drop(columns = drop_cols)
 
 #II.PREPROCESSING
@@ -174,6 +181,23 @@ for train_idx, val_idx in strat_shuff_split.split(X_train, y_train):
     X_val = X.iloc[val_idx, :].copy()
     y_val = y.iloc[val_idx].copy()
 
+#label encoder y
+#la_encode = LabelEncoder()
+#y_train = la_encode.fit_transform(y_train)
+#y_test = la_encode.transform(y_test)
+#y_val = la_encode.transform(y_val)
+
+#Binning by optbinning
+#var = scale_cols
+#for col in var:
+#       optb = MulticlassOptimalBinning(name = col,solver="cp")
+#       X_train[col] = optb.fit_transform(X_train[col], y_train, metric = 'bins')
+#       X_test[col] = optb.transform(X_test[col], metric = 'bins')
+#      X_val[col] = optb.transform(X_val[col], metric = 'bins')
+
+#X_train[var] = X_train[var].astype('category')
+#X_val[var] = X_val[var].astype('category')
+#X_test[var] = X_test[var].astype('category')
 #Scale
 scale_skew_cols = pd.DataFrame(X_train[scale_cols].skew(), columns = ['skew']).sort_values(by = 'skew',ascending=False).query('abs(skew) >= 1').index
 X_train[scale_skew_cols] = X_train[scale_skew_cols].apply(np.log1p)
@@ -209,10 +233,6 @@ X_val_poly = pf.fit_transform(X_val)
 #smote_sampler = SMOTE(random_state = 42) # can only fit to X: array-like or parse matrix
 #X_train, y_train = smote_sampler.fit_resample(X_train, y_train)
 
-sns.displot(data = y_train)
-plt.xlabel('Credit_Score value')
-plt.ylabel('Count')
-plt.show()  #balance between classes of Credit_Score
 
 
 print ('Train set', X_train.shape,  y_train.shape)
@@ -236,29 +256,31 @@ def evaluate_metrics(yt, yp):
     results_pos['f1score'] = f_beta
     return results_pos
 
+#modeling
+#by plotting KDE plot between X features and y, => many non linear relationship
+#we will fit polynomial X features to Logistic Regression
+print('Modeling by Logistic Regression: ')
+penalty = 'l2'
+multi_class = 'multinomial'
+solver = 'lbfgs'
+max_iter = 1000
+model = LogisticRegression(random_state = 42, penalty = penalty, multi_class = multi_class, solver = solver, max_iter = max_iter)
+model.fit(X_train_poly, y_train)
+print('Evaluating  train', evaluate_metrics(yt=y_train, yp=model.predict(X_train_poly)))
+print('Evaluating  val', evaluate_metrics(yt=y_val, yp=model.predict(X_val_poly)))
+print('Evaluating  test', evaluate_metrics(yt=y_test, yp=model.predict(X_test_poly)))
+
+
 print('Model: XGBClassifier')
-
-#PCA to decrease dimension of X poly
-pca_ = PCA(n_components=500)
-PCA_X_train_poly = pca_.fit_transform(X_train_poly)
-PCA_X_val_poly = pca_.transform(X_val_poly)
-PCA_X_test_poly = pca_.transform(X_test_poly)
-print('Explained variation per principal component: {}'.format(np.cumsum(pca_.explained_variance_ratio_)))
-
-
-
-
+#Gridsearch for XGBoost
 param_grid = {'learning_rate': [0.2,0.4, 0.5],
-             #'n_estimators' : [70, 100, 150, 220],
-              'max_depth': [5, 10, 15, 20, 30]
-              #'gamma' :[0.1, 1,2],
-              #'reg_lamda' : [2, 10, 20],
-              #'alpha': [0.5, 1, 2]
+             'n_estimators' : [70, 100, 150],
+              'max_depth': [10, 15, 20, 30],
               }
 early_stopping_rounds = 10
 objective = 'multi:softmax'
 eval_metric = 'mlogloss'
-num_class = 3
+num_class = 2
 eval_set = [(X_val, y_val)]
 model = XGBClassifier(objective = objective, eval_metric = eval_metric, num_class = num_class, early_stopping_rounds = early_stopping_rounds )
 search = GridSearchCV(estimator=model, param_grid=param_grid, scoring= 'neg_log_loss', cv = 3)
@@ -268,17 +290,14 @@ print(search.best_params_)
 print('Evaluating  train', evaluate_metrics(yt=y_train, yp=search.predict(X_train)))
 print('Evaluating  val', evaluate_metrics(yt=y_val, yp=search.predict(X_val)))
 print('Evaluating  test', evaluate_metrics(yt=y_test, yp=search.predict(X_test)))
+#Final param
 
-
-alpha = 0.8
-gamma = 0.8
-learning_rate = 0.13
-max_depth = 30
-n_estimators = 400
-reg_lamda = 20
+learning_rate = 0.2
+max_depth = 10
+n_estimators = 100
 eval_set = [(X_train, y_train), (X_val, y_val)]
-early_stopping_rounds = 40
-model =XGBClassifier(objective=objective,alpha = alpha, gamma = gamma, learning_rate=learning_rate, max_depth = max_depth, n_estimators=n_estimators, reg_lamda = reg_lamda, early_stopping_rounds = early_stopping_rounds)
+early_stopping_rounds = 10
+model =XGBClassifier(objective=objective,learning_rate=learning_rate, max_depth = max_depth, n_estimators=n_estimators, early_stopping_rounds = early_stopping_rounds)
 model.fit(X_train, y_train, eval_metric = eval_metric, eval_set = eval_set, verbose = False)
 results = model.evals_result()
 print(results)
@@ -313,13 +332,11 @@ print('Evaluating  test', evaluate_metrics(yt=y_test, yp=search.predict(X_test))
 #apply polynomial
 
 
-#modeling
-penalty = 'l2'
-multi_class = 'multinomial'
-solver = 'lbfgs'
-max_iter = 1000
-model = LogisticRegression(random_state = 42, penalty = penalty, multi_class = multi_class, solver = solver, max_iter = max_iter)
-model.fit(X_train_poly, y_train)
-print('Evaluating  train', evaluate_metrics(yt=y_train, yp=model.predict(X_train_poly)))
-print('Evaluating  val', evaluate_metrics(yt=y_val, yp=model.predict(X_val_poly)))
-print('Evaluating  test', evaluate_metrics(yt=y_test, yp=model.predict(X_test_poly)))
+
+
+#performance on test set
+#XGBoost: 'accuracy': 0.8004966420226876, 'recall': 0.8004966420226876, 'precision': 0.8008268161048924, 'f1score': 0.80043391514344
+#RandomForest: 'accuracy': 0.806873977086743, 'recall': 0.806873977086743, 'precision': 0.8073300644667447, 'f1score': 0.8067633622128491
+#LogisticRegression: 'accuracy': 0.6987414639652351, 'recall': 0.6987414639652351, 'precision': 0.698842342897399, 'f1score': 0.6983619004241316
+#The best model is RandomForest
+#Still Logistic model will be higher interpretable and can be improved performance by using WOE to segment the continous variables to catch up more non-linear relationship
