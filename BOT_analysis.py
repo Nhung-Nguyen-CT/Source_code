@@ -72,14 +72,9 @@ print("Top Absolute Correlations")
 print(get_top_abs_correlations(df = df1, mark = 0.6))
 
 df = df.drop(columns = ['Close-EMA-14', 'Close-EMA-28', 'Close-SMA-28','Open_close_distace','FFT-Coeff_6','FFT-Coeff_7','FFT-Coeff_8','FFT-Coeff_5','FFT-Coeff_3','FFT-Coeff_2'])
-numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
-df1 = df[numeric_columns].copy()
-scale_skew_cols = pd.DataFrame(df1.skew(), columns = ['skew']).sort_values(by = 'skew',ascending=False).query('abs(skew) >= 1.5').index
-pt = PowerTransformer(method='yeo-johnson')
-df[scale_skew_cols ] = pt.fit_transform(df[scale_skew_cols])
-print('after apply Yeo-Johnson Transformation: ',df[scale_skew_cols ].skew())
 
 #PLOT DISTRIBUTION OF NUMERICAL VARIABLE BY 'HAVE_PROFIT'
+numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
 df1 = df[numeric_columns + ['Have_profit']].copy()
 # Iterate through features and create KDE plots
 for i in range (math.ceil((len(df1.columns)-1)/4)):
@@ -95,20 +90,29 @@ for i in range (math.ceil((len(df1.columns)-1)/4)):
 #PREPROCESSING
 X = df[[i for i in df.columns if i != 'Have_profit']].copy()
 y = df['Have_profit'].copy()
-
-for i in range (50):
+y_pred_final = []
+for i in range (33):
         print(' i = ',i)
         d = 200
         train_size = 1000
         test_size = 200
         X_train = X.iloc[i*d:i*d+train_size,:].copy()
         y_train = y[i*d:i*d+ train_size].copy()
-        X_test1 = X.iloc[i*d + train_size + 1:i*d + train_size + test_size,:].copy()
-        y_test1 = y[i*d + train_size + 1:i*d + train_size + test_size].copy()
-        X_test2 = X.iloc[i*d + train_size + test_size + 1:i*d + train_size + test_size*2,:].copy()
-        y_test2 = y[i*d + train_size + test_size + 1:i*d + train_size + test_size*2].copy()
-        X_test3 = X.iloc[i*d + train_size + test_size*2 + 1:i*d + train_size + test_size*3,:].copy()
-        y_test3 = y[i*d + train_size + test_size*2 + 1:i*d + train_size + test_size*3].copy()
+        X_test1 = X.iloc[i*d + train_size:i*d + train_size + test_size,:].copy()
+        y_test1 = y[i*d + train_size:i*d + train_size + test_size].copy()
+        X_test2 = X.iloc[i*d + train_size + test_size:i*d + train_size + test_size*2,:].copy()
+        y_test2 = y[i*d + train_size + test_size:i*d + train_size + test_size*2].copy()
+        X_test3 = X.iloc[i*d + train_size + test_size*2:i*d + train_size + test_size*3,:].copy()
+        y_test3 = y[i*d + train_size + test_size*2:i*d + train_size + test_size*3].copy()
+
+        numeric_columns = [x for x in X_train.columns if X_train[x].dtypes != 'O']
+        X_train1 = X_train[numeric_columns].copy()
+        scale_skew_cols = pd.DataFrame(X_train1.skew(), columns=['skew']).sort_values(by='skew', ascending=False).query('abs(skew) >= 1.5').index
+        pt = PowerTransformer(method='yeo-johnson')
+        X_train[scale_skew_cols] = pt.fit_transform(X_train[scale_skew_cols])
+        X_test1[scale_skew_cols] = pt.transform(X_test1[scale_skew_cols])
+        X_test2[scale_skew_cols] = pt.transform(X_test2[scale_skew_cols])
+        X_test3[scale_skew_cols] = pt.transform(X_test3[scale_skew_cols])
 
         scalar = StandardScaler()
         X_train[numeric_columns] = scalar.fit_transform(X_train[numeric_columns])
@@ -210,4 +214,22 @@ for i in range (50):
         print('stacking, average vote')
         y_pred = (y_pred1_3 + y_pred1_2 + y_pred1_1*2)/4
         y_pred = np.where(y_pred >0.5 , 1, 0)
+        print('Len of y_pred', len(y_pred))
         print('Evaluating  train', evaluate_metrics(yt=y_test1, yp = y_pred))
+        y_pred_final.append(y_pred)
+
+
+y_pred_final=np.concatenate(y_pred_final)
+print(len(y_pred_final))
+
+#recalculate profit
+with open('events_force.pkl', 'rb') as f:
+    df = pickle.load(f)
+df = df.iloc[0:len(y_pred_final),:].copy()
+df['Have_profit_predict'] = y_pred_final
+df['Profit_after_classification'] = df['Profit']*df['Have_profit_predict']
+# df['Have_profit'] = np.where(df['Profit_after_classification'] > 0, 'Profit',)
+# df['Have_profit'].value_counts(normalize = True)
+print(np.sum(df['Profit_after_classification'] > 0) / len(df))
+print(np.sum(df['Profit_after_classification'] == 0) / len(df))
+print(np.sum(df['Profit_after_classification'] < 0) / len(df))
