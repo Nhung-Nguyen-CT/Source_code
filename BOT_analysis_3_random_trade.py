@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pickle
 import seaborn as sns
+from mpl_toolkits.mplot3d import Axes3D
 from sklearn.preprocessing import PowerTransformer, StandardScaler
 import math
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
@@ -28,70 +29,67 @@ pd.set_option('display.width', 5000)
 
 
 # Load data from pickle file
-with open('events_force.pkl', 'rb') as f:
-    df = pickle.load(f)
+df = pd.read_pickle('events_random_setup.pkl')
 
 df.info()
-df = df.drop(columns = ['Record_Date','Open_Date','Open_Price','Num_Tick', 'Highest_Price','Lowest_Price','Close_Date','Close_Price','Maximum_Stoploss','Date'])
+
 print(df.info)
-#CLEAN AND TRANSFORM
-# classify: profit into profit and loss
+df = df.sort_values(by = 'Close_Date').copy()
 df['Have_profit'] = np.where(df['Profit'] >= 0, 'True', 'False')
-df['Open_close_distace'] = (df['Close'] - df['Open'])/df['Close']
-df['Low_open_distance'] = (df['Low'] - df['Open'])/df['Close']
-df['High_open_distance'] = (df['High'] - df['Open'])/df['Close']
-df['Price_distace_per_volume'] = df['Open_close_distace']/df['Volume']
-#check lenghth of every values in 'FFT-Coeff' and sparse
 df['FFT-Coeff'].apply(len).unique()
 a = np.vstack(df['FFT-Coeff'])
-for x in range(10):
-    df[f'FFT-Coeff_{x}'] = a[:, x]
-df = df.drop(columns = ['Profit', 'Open', 'Close', 'Low', 'High','Volume','FFT-Coeff','FFT-Freqs'])
-df.info()
+for x in range(4):
+    df[f'FFT-Coeff_{x+1}'] = a[:, x*5]+a[:, x*5+1]+a[:, x*5+2]+a[:, x*5+3]+a[:, x*5+4]
+df['FFT-Coeff_total'] = df['FFT-Coeff_1'] + df['FFT-Coeff_2'] + df['FFT-Coeff_3'] + df['FFT-Coeff_4']
+df['Open_close_distace'] = (df['Close'] - df['Open'])
+df['Price_distace_per_volume'] = df['Open_close_distace']/df['Volume']
 
-#CHECK CORRELATION BETWEEN NUMERICAL VARIABLE
-def get_redundant_pairs(df):
-    '''Get diagonal and lower triangular pairs of correlation matrix'''
-    pairs_to_drop = set()
-    cols = df.columns
-    for i in range(0, df.shape[1]):
-        for j in range(0, i+1):
-            pairs_to_drop.add((cols[i], cols[j]))
-    return pairs_to_drop
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
+import numpy as np
 
-def get_top_abs_correlations(df, mark = 0.5):
-    au_corr = df.corr().abs().unstack()
-    labels_to_drop = get_redundant_pairs(df)
-    au_corr = au_corr.drop(labels=labels_to_drop).sort_values(ascending=False)
+# Initialize empty lists to store data
+x_data = []
+y_data = []
+z_data = []
 
-    return au_corr[au_corr > mark]
 
-numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
-df1 = df[numeric_columns].copy()
-print("Top Absolute Correlations")
-print(get_top_abs_correlations(df = df1, mark = 0.6))
+# Function to update the plot with new data
+def update(frame, step = 200):
+    # Calculate the start and end index for the current batch
+    start_idx = frame * step
+    end_idx = min((frame + 1) * step, len(df))
 
-df = df.drop(columns = ['Close-EMA-14', 'Close-EMA-28', 'Close-SMA-28','Open_close_distace','FFT-Coeff_6','FFT-Coeff_7','FFT-Coeff_8','FFT-Coeff_5','FFT-Coeff_3','FFT-Coeff_2'])
+    # Get the data points for the current batch
+    batch_data = df.iloc[start_idx:end_idx]
+    batch_data['Have_profit_int']= batch_data['Have_profit'].astype('category').cat.codes
 
-#PLOT DISTRIBUTION OF NUMERICAL VARIABLE BY 'HAVE_PROFIT'
-numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
-df1 = df[numeric_columns + ['Have_profit']].copy()
-# Iterate through features and create KDE plots
-for i in range (math.ceil((len(df1.columns)-1)/4)):
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle('KDE Plots for Numerical Features by Have_profit')
-    sns.kdeplot(data=df1, x=numeric_columns[i*4+0], hue='Have_profit', ax=axes[0, 0])
-    sns.kdeplot(data=df1, x=numeric_columns[i*4 + 1], hue='Have_profit', ax=axes[0, 1])
-    sns.kdeplot(data=df1, x=numeric_columns[i*4 + 2], hue='Have_profit', ax=axes[1, 0])
-    if i < 4:
-        sns.kdeplot(data=df1, x=numeric_columns[i*4 + 3], hue='Have_profit', ax=axes[1, 1])
-    plt.show()
+    # Update the scatter plot with the current batch of data
+    ax.clear()
+    ax.scatter(batch_data['RSI-Force-Entropy'], batch_data['RSI-Force'], batch_data['Profit'], c = batch_data['Have_profit_int'])
+    ax.set_xlabel('RSI-Force-Entropy')
+    ax.set_ylabel('RSI-Force')
+    ax.set_zlabel('Profit')
+    ax.set_title(f'Frame {frame}')
 
-#PREPROCESSING
-X = df[[i for i in df.columns if i != 'Have_profit']].copy()
-y = df['Have_profit'].copy()
+    return ax
+
+
+# Create a figure and 3D axes
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+# Create the animation
+ani = FuncAnimation(fig, update, frames=20, interval=4000, repeat=True)
+
+plt.show()
+df2 = df.loc[(df['Type'] == 'short') & ((df['LON_Timerange'] == 1) | (df['NEW_Timerange'] == 1)) & (df['Target'] >= 2*df['Stoploss'])]
+X = df2[['RSI-Force','RSI-Force-Entropy', 'Entropy', 'FFT-Coeff_1', 'FFT-Coeff_total', 'Price_distace_per_volume','Target', 'Stoploss']]
+y = df2['Have_profit']
 y_pred_final = []
-for i in range (33):
+
+for i in range (200):
         print(' i = ',i)
         d = 200
         train_size = 1000
@@ -108,11 +106,12 @@ for i in range (33):
         numeric_columns = [x for x in X_train.columns if X_train[x].dtypes != 'O']
         X_train1 = X_train[numeric_columns].copy()
         scale_skew_cols = pd.DataFrame(X_train1.skew(), columns=['skew']).sort_values(by='skew', ascending=False).query('abs(skew) >= 1.5').index
-        pt = PowerTransformer(method='yeo-johnson')
-        X_train[scale_skew_cols] = pt.fit_transform(X_train[scale_skew_cols])
-        X_test1[scale_skew_cols] = pt.transform(X_test1[scale_skew_cols])
-        X_test2[scale_skew_cols] = pt.transform(X_test2[scale_skew_cols])
-        X_test3[scale_skew_cols] = pt.transform(X_test3[scale_skew_cols])
+        if len(scale_skew_cols) > 0:
+            pt = PowerTransformer(method='yeo-johnson')
+            X_train[scale_skew_cols] = pt.fit_transform(X_train[scale_skew_cols])
+            X_test1[scale_skew_cols] = pt.transform(X_test1[scale_skew_cols])
+            X_test2[scale_skew_cols] = pt.transform(X_test2[scale_skew_cols])
+            X_test3[scale_skew_cols] = pt.transform(X_test3[scale_skew_cols])
 
         scalar = StandardScaler()
         X_train[numeric_columns] = scalar.fit_transform(X_train[numeric_columns])
@@ -222,9 +221,7 @@ for i in range (33):
 y_pred_final=np.concatenate(y_pred_final)
 print(len(y_pred_final))
 
-#recalculate profit
-with open('events_force.pkl', 'rb') as f:
-    df = pickle.load(f)
+df = pd.read_pickle('events_random_setup.pkl')
 df = df.iloc[0:len(y_pred_final),:].copy()
 df['Have_profit_predict'] = y_pred_final
 df['Profit_after_classification'] = df['Profit']*df['Have_profit_predict']

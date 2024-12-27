@@ -32,21 +32,23 @@ with open('events_force.pkl', 'rb') as f:
     df = pickle.load(f)
 
 df.info()
-df = df.drop(columns = ['Record_Date','Open_Date','Open_Price','Num_Tick', 'Highest_Price','Lowest_Price','Close_Date','Close_Price','Maximum_Stoploss','Date'])
+
 print(df.info)
 #CLEAN AND TRANSFORM
 # classify: profit into profit and loss
 df['Have_profit'] = np.where(df['Profit'] >= 0, 'True', 'False')
-df['Open_close_distace'] = (df['Close'] - df['Open'])/df['Close']
-df['Low_open_distance'] = (df['Low'] - df['Open'])/df['Close']
-df['High_open_distance'] = (df['High'] - df['Open'])/df['Close']
+df['Open_close_distace'] = (df['Close'] - df['Open'])
+df['Low_open_distance'] = (df['Low'] - df['Open'])
+df['High_open_distance'] = (df['High'] - df['Open'])
 df['Price_distace_per_volume'] = df['Open_close_distace']/df['Volume']
 #check lenghth of every values in 'FFT-Coeff' and sparse
 df['FFT-Coeff'].apply(len).unique()
 a = np.vstack(df['FFT-Coeff'])
-for x in range(10):
-    df[f'FFT-Coeff_{x}'] = a[:, x]
-df = df.drop(columns = ['Profit', 'Open', 'Close', 'Low', 'High','Volume','FFT-Coeff','FFT-Freqs'])
+for x in range(4):
+    df[f'FFT-Coeff_{x+1}'] = a[:, x*5]+a[:, x*5+1]+a[:, x*5+2]+a[:, x*5+3]+a[:, x*5+4]
+df['FFT-Coeff_total'] = df['FFT-Coeff_1'] + df['FFT-Coeff_2'] + df['FFT-Coeff_3'] + df['FFT-Coeff_4']
+df = df.drop(columns = ['Profit', 'Open', 'Low', 'High','Close','Volume','FFT-Coeff','FFT-Freqs'])
+df = df.drop(columns = ['Record_Date','Open_Date','Open_Price','Num_Tick', 'Highest_Price','Lowest_Price','Close_Date','Close_Price','Maximum_Stoploss','Date'])
 df.info()
 
 #CHECK CORRELATION BETWEEN NUMERICAL VARIABLE
@@ -71,8 +73,8 @@ df1 = df[numeric_columns].copy()
 print("Top Absolute Correlations")
 print(get_top_abs_correlations(df = df1, mark = 0.6))
 
-df = df.drop(columns = ['Close-EMA-14', 'Close-EMA-28', 'Close-SMA-28','Open_close_distace','FFT-Coeff_6','FFT-Coeff_7','FFT-Coeff_8','FFT-Coeff_5','FFT-Coeff_3','FFT-Coeff_2'])
-
+df = df.drop(columns = ['Close-EMA-14', 'Close-EMA-28', 'Close-SMA-28','Close-RSI-14', 'Close-RSI-28', 'Open_close_distace','TOK_Timerange','SYD_Timerange'])
+df = df.drop(columns = ['Close-SMA-14'])
 #PLOT DISTRIBUTION OF NUMERICAL VARIABLE BY 'HAVE_PROFIT'
 numeric_columns = [x for x in df.columns if df[x].dtypes != 'O']
 df1 = df[numeric_columns + ['Have_profit']].copy()
@@ -82,10 +84,15 @@ for i in range (math.ceil((len(df1.columns)-1)/4)):
     fig.suptitle('KDE Plots for Numerical Features by Have_profit')
     sns.kdeplot(data=df1, x=numeric_columns[i*4+0], hue='Have_profit', ax=axes[0, 0])
     sns.kdeplot(data=df1, x=numeric_columns[i*4 + 1], hue='Have_profit', ax=axes[0, 1])
-    sns.kdeplot(data=df1, x=numeric_columns[i*4 + 2], hue='Have_profit', ax=axes[1, 0])
-    if i < 4:
+    if i < 3:
+        sns.kdeplot(data=df1, x=numeric_columns[i*4 + 2], hue='Have_profit', ax=axes[1, 0])
         sns.kdeplot(data=df1, x=numeric_columns[i*4 + 3], hue='Have_profit', ax=axes[1, 1])
     plt.show()
+
+#MORE PLOT
+df2 = df.loc[df['Type'] == 'long'].copy()
+
+
 
 #PREPROCESSING
 X = df[[i for i in df.columns if i != 'Have_profit']].copy()
