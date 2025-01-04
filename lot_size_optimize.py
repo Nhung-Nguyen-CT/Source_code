@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split, learning_curve
 from sklearn.linear_model import LogisticRegression
 from sklearn import metrics
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix, ConfusionMatrixDisplay, precision_recall_fscore_support, precision_score, recall_score
+from extreme_points_detection import detect_extreme_points
 
 
 with open('tom_method_data.pkl', 'rb') as file:
@@ -26,10 +27,45 @@ long_events['acc_profit'] = np.cumsum(long_events['Profit'])
 short_events['acc_profit'] = np.cumsum(short_events['Profit'])
 total_events['acc_profit'] = np.cumsum(total_events['Profit'])
 
-sns.lineplot(x= 'Close_Date', y= 'acc_profit', data= long_events)
-plt.show()
-sns.lineplot(x= 'Close_Date', y= 'acc_profit', data= short_events)
-plt.show()
-sns.lineplot(x= 'Date', y= 'Close', data= data)
-plt.show()
+def define_biggest_trend(in_arr: np.ndarray):
+    np_arr = np.asarray(in_arr)
+    max_index = np.argmax(np_arr)
+    min_index = np.argmin(np_arr)
+    if max_index > min_index:
+        if 0.5 *(np.max(np_arr) - np.min(np_arr)) > (np.max(np_arr) - np.min(np_arr[max_index:])):
+            trend = "up"
+        else:
+            trend = "down"
+            max_index = np.argmax(np_arr)
+            min_index = np.argmin(np_arr[max_index:]) + max_index
+    else:
+        trend = "down"
+    return trend, max_index, min_index
+
+
+def switch_status_trading(in_arr, trend, max_index, min_index, previous_trading_status, current_index):
+    next_status = previous_trading_status
+    if trend == "down" :
+        distance = np.abs(in_arr(min_index) - in_arr(max_index))
+        current_top_index = np.argmax(in_arr[min_index:]) + min_index
+        if (previous_trading_status == False) and ((in_arr[current_index] - in_arr[min_index]) >= ( 0.15 * distance )) and ((in_arr[current_top_index] - in_arr[current_index]) <= ( 0.15 * (in_arr[current_top_index] - in_arr[min_index] ))):
+            next_status = True
+        else:
+            if (previous_trading_status == True) and (((in_arr[current_index] - in_arr[min_index]) < ( 0.15 * distance )) or ((in_arr[current_top_index] - in_arr[current_index]) > ( 0.15 * (in_arr[current_top_index] - in_arr[min_index] )))):
+                next_status = False
+    if trend == "up":
+        distance = np.abs(in_arr(min_index) - in_arr(max_index))
+        bottom_after_max_index = np.argmin(in_arr[max_index:]) + max_index
+        close = in_arr[min_index:max_index+1]
+        extreme_points_index, top_ = detect_extreme_points(closes = close, num_stick = len(close))
+        extreme_points_index = extreme_points_index + min_index
+        bottom_before_max_index = extreme_points_index[-1]
+        if (previous_trading_status == False) and ((in_arr[current_index] - in_arr[bottom_after_max_index]) >= ( 0.15 * (in_arr[max_index] - in_arr[bottom_after_max_index]) )):
+            next_status = True
+        else:
+            if (previous_trading_status == True) and (((in_arr[max_index] - in_arr[current_index]) >= (0.15 * (in_arr[max_index] - in_arr[min_index])) or ((in_arr[max_index] - in_arr[current_index]) >= (0.15 * (in_arr[max_index] - in_arr[bottom_before_max_index]))))):
+                next_status = False
+    return next_status
+
+
 
