@@ -44,28 +44,56 @@ def define_biggest_trend(in_arr: np.ndarray):
 
 
 def switch_status_trading(in_arr, trend, max_index, min_index, previous_trading_status, current_index):
+    in_arr = np.asarray(in_arr).copy()
     next_status = previous_trading_status
     if trend == "down" :
-        distance = np.abs(in_arr(min_index) - in_arr(max_index))
+        distance = np.abs(in_arr[min_index] - in_arr[max_index])
         current_top_index = np.argmax(in_arr[min_index:]) + min_index
-        if (previous_trading_status == False) and ((in_arr[current_index] - in_arr[min_index]) >= ( 0.15 * distance )) and ((in_arr[current_top_index] - in_arr[current_index]) <= ( 0.15 * (in_arr[current_top_index] - in_arr[min_index] ))):
+        if (previous_trading_status == False) and ((in_arr[current_index] - in_arr[min_index]) >= (0.15 * distance)) and ((in_arr[current_top_index] - in_arr[current_index]) <= (0.15 * (in_arr[current_top_index] - in_arr[min_index]))):
             next_status = True
         else:
             if (previous_trading_status == True) and (((in_arr[current_index] - in_arr[min_index]) < ( 0.15 * distance )) or ((in_arr[current_top_index] - in_arr[current_index]) > ( 0.15 * (in_arr[current_top_index] - in_arr[min_index] )))):
                 next_status = False
+
     if trend == "up":
-        distance = np.abs(in_arr(min_index) - in_arr(max_index))
+        distance = np.abs(in_arr[min_index] - in_arr[max_index])
         bottom_after_max_index = np.argmin(in_arr[max_index:]) + max_index
         close = in_arr[min_index:max_index+1]
-        extreme_points_index, top_ = detect_extreme_points(closes = close, num_stick = len(close))
+        extreme_points_index, top_ = detect_extreme_points(closes = close, num_ticks = len(close))
         extreme_points_index = extreme_points_index + min_index
-        bottom_before_max_index = extreme_points_index[-1]
+        bottom_before_max_index = extreme_points_index[-2]
         if (previous_trading_status == False) and ((in_arr[current_index] - in_arr[bottom_after_max_index]) >= ( 0.15 * (in_arr[max_index] - in_arr[bottom_after_max_index]) )):
-            next_status = True
+                next_status = True
         else:
             if (previous_trading_status == True) and (((in_arr[max_index] - in_arr[current_index]) >= (0.15 * (in_arr[max_index] - in_arr[min_index])) or ((in_arr[max_index] - in_arr[current_index]) >= (0.15 * (in_arr[max_index] - in_arr[bottom_before_max_index]))))):
                 next_status = False
+
     return next_status
 
+status = []
+for i in range(1000):
+    if i < 30:
+        status.append(True)
+    else:
+        arr = long_events['acc_profit'].iloc[:i]
+        trend, max_index, min_index = define_biggest_trend(arr)
+        next_status = switch_status_trading(in_arr= arr,trend = trend, max_index= max_index,min_index= min_index,  previous_trading_status= status[i-1], current_index= i-1)
+        status.append(next_status)
+
+arr = long_events.iloc[:1000].copy()
+arr['trading_status'] = status
+sns.scatterplot(
+    x='Close_Date',
+    y='acc_profit',
+    data=arr.iloc[:1200],
+    hue='trading_status',
+    palette={True: 'green', False: 'red'},
+    legend=False  # Hide legend if not needed###
+    )
+
+plt.xlabel('Close Date')
+plt.ylabel('Accumulated Profit')
+plt.title('Accumulated Profit with Trading Status Indicators')
+plt.show()
 
 
