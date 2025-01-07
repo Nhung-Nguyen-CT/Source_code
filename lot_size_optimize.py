@@ -71,16 +71,16 @@ def switch_status_trading(in_arr, trend, max_index, min_index, previous_trading_
     return next_status
 
 status = []
-for i in range(1000):
+for i in range(1200):
     if i < 30:
         status.append(True)
     else:
-        arr = long_events['acc_profit'].iloc[:i]
+        arr = short_events['acc_profit'].iloc[:i]
         trend, max_index, min_index = define_biggest_trend(arr)
         next_status = switch_status_trading(in_arr= arr,trend = trend, max_index= max_index,min_index= min_index,  previous_trading_status= status[i-1], current_index= i-1)
         status.append(next_status)
 
-arr = long_events.iloc[:1000].copy()
+arr = short_events.iloc[:1200].copy()
 arr['trading_status'] = status
 sns.scatterplot(
     x='Close_Date',
